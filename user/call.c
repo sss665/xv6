@@ -12,6 +12,9 @@ int f(int x) {
 }
 
 void main(void) {
-  printf("%d %d\n", f(8)+1, 13);
+  int a0;
+  write(1,"#",3);
+  asm volatile("mv %0, a0" : "=r" (a0) );
+  printf("%d\n",a0);
   exit(0);
 }
