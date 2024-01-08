@@ -470,6 +470,7 @@ scheduler(void)
       }
       release(&p->lock);
     }
+    printf("6");
   }
 }
 
