@@ -5,6 +5,7 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"
 
 /*
  * the kernel's page table.
@@ -14,15 +15,18 @@ pagetable_t kernel_pagetable;
 extern char etext[];  // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
-extern char cite[];
-
+struct ref_stru{
+  struct spinlock lock;
+  int cite[PHYSTOP/PGSIZE];
+};
+extern struct ref_stru ref;
 
 int cow(pagetable_t pagetable,uint64 va){
   if(va>=MAXVA){
     return -1;
   }
   uint64 va0  = PGROUNDDOWN(va);
-  pte_t* pte = walk(pagetable,va,0);
+  pte_t* pte = walk(pagetable,va0,0);
   if(pte == 0 || (*pte & PTE_V) == 0 || (*pte & PTE_U) == 0)
       return -1;
   uint64 pa = PTE2PA(*pte);
@@ -30,33 +34,79 @@ int cow(pagetable_t pagetable,uint64 va){
     return -1;
   uint64 flags = PTE_FLAGS(*pte);
   if((*pte & PTE_RSW)!=0 && (*pte & PTE_W)==0){
-    if(cite[pa/PGSIZE]>1){
+    if(ref.cite[pa/PGSIZE]>1){
       uint64 ka = (uint64)kalloc();
       if(ka==0){
         return -1;
       }
       else{
+        
         memmove((char *)ka,(char *)pa,PGSIZE);
+        uvmunmap(pagetable,va0,1,1);
         if(mappages(pagetable,va0, PGSIZE, ka, (flags|PTE_W) & ~PTE_RSW) != 0){
-        //kfree(mem);
+          kfree((void*)ka);
           uvmunmap(pagetable, va0, 1, 1);
           return -1;
         }
       }
-      kfree((void*)pa);
     }
-    else if(cite[pa/PGSIZE]==1){
+    else if(ref.cite[pa/PGSIZE]==1){
       *pte &= ~PTE_RSW;
       *pte |= PTE_W; 
     }
     else
       return -1;
   }
+  else if((*pte & PTE_RSW)==0 && (*pte & PTE_W)!=0){
+    return 0;
+  }
   else{
     return -1;
   }
   return 0;
 }
+/*int cow(pagetable_t pagetable,uint64 va)
+{
+  if(va >= MAXVA)//合法检查
+    return -1;
+  pte_t* pte=walk(pagetable,va,0);
+  if(pte == 0 || (*pte & (PTE_V)) == 0 || (*pte & PTE_U) == 0)//合法检查
+    return -1;
+  va=PGROUNDDOWN(va);//pagealign否则会在mappages多分配一页
+                     //另一个解决方案是把mappages中的PGISZE参数改为1
+  uint64 pa = PTE2PA(*pte);
+  uint flags = PTE_FLAGS(*pte);
+  //COW位为0，且没有写权限，非法写入
+  if(!(*pte&PTE_RSW)&&!(*pte&PTE_W))return -1;
+  //有写权限orCOW位是0，该页不是COWpage
+  if(*pte&PTE_W||(*pte&PTE_RSW)==0)return 0;
+  //COWpage处理，均是COW位是1且没有写权限的情况
+  if(ref.cite[pa/PGSIZE]>1)//分配新页
+  {
+    char* mem;
+    if((mem = kalloc()) == 0)
+        panic("no free mem to uncow");
+    memmove(mem, (char*)pa, PGSIZE);//复制
+    //unmap掉现在的页表项，方便后面重新map。也可以直接更改*pte，
+    //那么再mappages后还需调用kfree减少refcount
+    uvmunmap(pagetable,PGROUNDDOWN(va),1,1);
+    flags &= ~PTE_RSW;
+    flags |=PTE_W;
+    if(mappages(pagetable, va, PGSIZE, (uint64)mem, flags) != 0)
+    {
+      kfree(mem);
+      return -1;
+    }
+    return 0;
+  }
+  else if(ref.cite[pa/PGSIZE]==1)//只需进行uncow操作
+  {
+      *pte &= ~PTE_RSW;
+      *pte |=PTE_W;
+    return 0;
+  }
+  else{return -1;}
+}*/
 // Make a direct-map page table for the kernel.
 pagetable_t
 kvmmake(void)
@@ -376,7 +426,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       //kfree(mem);
       goto err;
     }
-    cite[pa/PGSIZE]++;
+    inc(pa);
   }
   return 0;
 

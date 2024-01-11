@@ -174,6 +174,7 @@ int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
 int             cow(pagetable_t, uint64);
+int             inc(uint64);
 
 // plic.c
 void            plicinit(void);
