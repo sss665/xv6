@@ -98,11 +98,12 @@ e1000_transmit(struct mbuf *m)
   //
   // Your code here.
   //
-  // the mbuf contains an ethernet frame; program it into
+  // the mbuf contains an ethernte frame; program it into
   // the TX descriptor ring so that the e1000 sends it. Stash
   // a pointer so that it can be freed after sending.
   //
-  
+  int n = reg[E1000_TDT];
+  printf("hhh");
   return 0;
 }
 
@@ -115,6 +116,7 @@ e1000_recv(void)
   // Check for packets that have arrived from the e1000
   // Create and deliver an mbuf for each packet (using net_rx()).
   //
+  printf("666");
 }
 
 void
