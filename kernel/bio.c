@@ -30,6 +30,7 @@ struct {
   // Linked list of all buffers, through prev/next.
   // Sorted by how recently the buffer was used.
   // head.next is most recent, head.prev is least.
+
   struct buf head;
 } bcache;
 
@@ -59,12 +60,13 @@ static struct buf*
 bget(uint dev, uint blockno)
 {
   struct buf *b;
-
+  printf("%d\n",blockno);
   acquire(&bcache.lock);
 
   // Is the block already cached?
   for(b = bcache.head.next; b != &bcache.head; b = b->next){
     if(b->dev == dev && b->blockno == blockno){
+      
       b->refcnt++;
       release(&bcache.lock);
       acquiresleep(&b->lock);
