@@ -11,8 +11,6 @@
 int
 main(int argc, char *argv[])
 {
-    int fd = open("f", O_WRONLY | O_CREATE);
-    close(fd);
-    return 0;
+    
 
 }

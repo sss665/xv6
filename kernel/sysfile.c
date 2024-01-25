@@ -76,7 +76,7 @@ sys_read(void)
   argint(2, &n);
   if(argfd(0, 0, &f) < 0)
     return -1;
-  return fileread(f, p, n);
+  return fileread(f, p, n);      
 }
 
 uint64
@@ -524,10 +524,10 @@ sys_mmap(void){
       p->vma[i].used=1;
       p->vma[i].fd = fd;
       p->vma[i].addr = p->sz;
-      p->vam[i].length = length;
-      p->vam[i].prot = prot;
-      p->vam[i].flags = flags;
-      p->vam[i].offset = offset;
+      p->vma[i].length = length;
+      p->vma[i].prot = prot;
+      p->vma[i].flags = flags;
+      p->vma[i].offset = offset;
       break;
     }
   }
