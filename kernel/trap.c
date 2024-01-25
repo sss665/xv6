@@ -67,7 +67,29 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else {
+  } else if(r_scause()==13||r_scause()==15){
+    uint64 va = r_stval();
+    char *pa;
+    int i;
+    struct file *f;
+    for(i=0;i<16;i++){
+      if(p->vma[i].used ==1){
+        if(va<(p->vma[i].addr+length) && va>p->vma[i].addr){
+          break;
+        }
+      }
+    }
+    if(i!=16 && pa = kalloc()!=0){
+      f=p->ofile[fd];
+      ilock(f->ip);
+      if((r = readi(f->ip, 1, p->vma[i].addr, f->off, n)) > 0)
+      f->off += r;
+      iunlock(f->ip);
+    }
+    else{
+      setkilled(p);
+    }
+  }else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     setkilled(p);

@@ -55,6 +55,9 @@ procinit(void)
       initlock(&p->lock, "proc");
       p->state = UNUSED;
       p->kstack = KSTACK((int) (p - proc));
+      for(int i=0;i<16;i++){
+        p->vma[i].used = 0;
+      }
   }
 }
 

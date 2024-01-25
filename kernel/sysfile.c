@@ -503,3 +503,42 @@ sys_pipe(void)
   }
   return 0;
 }
+
+uint64
+sys_mmap(void){
+  uint64 addr;
+  uint64 length;
+  uint64 offset;
+  int prot, flags, fd
+  struct proc *p = myproc();
+  struct vma *a;
+  argaddr(0, &addr);
+  argaddr(1, &length);
+  argint(2, &prot);
+  argint(3, &flags);
+  argint(4, &fd);
+  argaddr(5, &offset);
+  
+  for(int i=0;i<16;i++){
+    if(p->vma[i].used=0){
+      p->vma[i].used=1;
+      p->vma[i].fd = fd;
+      p->vma[i].addr = p->sz;
+      p->vam[i].length = length;
+      p->vam[i].prot = prot;
+      p->vam[i].flags = flags;
+      p->vam[i].offset = offset;
+      break;
+    }
+  }
+  p->sz += length;
+  
+
+  return 0xffffffffffffffff;
+}
+
+
+uint64
+sys_munmap(void){
+  return 0;
+}
