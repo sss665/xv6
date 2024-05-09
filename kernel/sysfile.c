@@ -509,36 +509,78 @@ sys_mmap(void){
   uint64 addr;
   uint64 length;
   uint64 offset;
-  int prot, flags, fd
+  int prot, flags, fd;
   struct proc *p = myproc();
-  struct vma *a;
   argaddr(0, &addr);
   argaddr(1, &length);
   argint(2, &prot);
   argint(3, &flags);
   argint(4, &fd);
   argaddr(5, &offset);
-  
-  for(int i=0;i<16;i++){
-    if(p->vma[i].used=0){
+  int i=0;
+  if(!p->ofile[fd]->writable && (prot & PROT_WRITE) && flags&MAP_SHARED){
+    return -1;
+  }
+  for(i=0;i<16;i++){
+    if(p->vma[i].used==0){
       p->vma[i].used=1;
-      p->vma[i].fd = fd;
-      p->vma[i].addr = p->sz;
+      p->vma[i].f = p->ofile[fd];
+      p->vma[i].addr = PGROUNDUP(p->sz);
       p->vma[i].length = length;
       p->vma[i].prot = prot;
       p->vma[i].flags = flags;
       p->vma[i].offset = offset;
+      p->vma[i].iaddr = p->vma[i].addr;
       break;
     }
   }
-  p->sz += length;
-  
-
-  return 0xffffffffffffffff;
+  filedup(p->ofile[fd]);
+  p->sz = PGROUNDUP(p->sz)+length;
+  return p->vma[i].addr;
 }
 
 
 uint64
 sys_munmap(void){
+  uint64 length;
+  struct proc *p = myproc();
+  uint64 va;
+  struct file *f;
+
+  argaddr(0, &va);
+  argaddr(1, &length);
+  int i = 0;
+  for(i=0;i<16;i++){
+    if(p->vma[i].used ==1){
+      if(va<(p->vma[i].addr+length) && va>=p->vma[i].addr){
+        break;
+      }
+    }
+  }
+  if(i == 16)
+    return -1;
+  f = p->vma[i].f;          
+  uint64 a;
+  pte_t *pte;
+  for(a = va; a < va + length; a += PGSIZE){
+    if((pte = walk(p->pagetable, a, 0)) != 0 && (*pte & PTE_V)){
+      if(p->vma[i].flags == MAP_SHARED){
+        begin_op();
+        ilock(f->ip);
+        writei(p->vma[i].f->ip, 1, (uint64)a, a-p->vma[i].iaddr, PGSIZE);
+        iunlock(f->ip);   
+        end_op();
+      }
+      uvmunmap(p->pagetable, PGROUNDDOWN(a), 1, 1);
+    }
+  }
+  p->vma[i].length -= length;
+  if(p->vma[i].addr == va){
+    p->vma[i].addr += length;
+  }
+  if(p->vma[i].length == 0){
+    fileclose(f);
+    p->vma[i].used = 0;
+  }
   return 0;
 }

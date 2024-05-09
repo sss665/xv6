@@ -15,7 +15,16 @@ extern char trampoline[], uservec[], userret[];
 void kernelvec();
 
 extern int devintr();
-
+struct file {
+  enum { FD_NONE, FD_PIPE, FD_INODE, FD_DEVICE } type;
+  int ref; // reference count
+  char readable;
+  char writable;
+  struct pipe *pipe; // FD_PIPE
+  struct inode *ip;  // FD_INODE and FD_DEVICE
+  uint off;          // FD_INODE
+  short major;       // FD_DEVICE
+};
 void
 trapinit(void)
 {
@@ -67,29 +76,32 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } /*else if(r_scause()==13||r_scause()==15){
+  } else if(r_scause()==13||r_scause()==15){
     uint64 va = r_stval();
     char *pa;
     int i;
     struct file *f;
     for(i=0;i<16;i++){
       if(p->vma[i].used ==1){
-        if(va<(p->vma[i].addr+length) && va>p->vma[i].addr){
+        if(va<(p->vma[i].addr+p->vma[i].length) && va>=p->vma[i].addr){
           break;
         }
       }
     }
-    if(i!=16 && pa = kalloc()!=0){
-      f=p->ofile[fd];
+    if(i!=16 && ((pa = kalloc())!=0)){
+      memset(pa,0,PGSIZE);
+      f=p->vma[i].f;
       ilock(f->ip);
-      if((r = readi(f->ip, 1, p->vma[i].addr, f->off, n)) > 0)
-      f->off += r;
+      readi(f->ip, 0, (uint64)pa, PGROUNDDOWN(va)-p->vma[i].addr, PGSIZE);
       iunlock(f->ip);
+      if(mappages(p->pagetable, PGROUNDDOWN(va), PGSIZE, (uint64)pa, (p->vma[i].prot << 1) | PTE_U) < 0){
+        setkilled(p);
+      }
     }
     else{
       setkilled(p);
     }
-  }*/else {
+  }else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     setkilled(p);

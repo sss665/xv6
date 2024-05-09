@@ -1,10 +1,25 @@
+
 #include "types.h"
+#include "fs.h"
 #include "param.h"
 #include "memlayout.h"
 #include "riscv.h"
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fcntl.h"
+#include "stat.h"
+
+struct file {
+  enum { FD_NONE, FD_PIPE, FD_INODE, FD_DEVICE } type;
+  int ref; // reference count
+  char readable;
+  char writable;
+  struct pipe *pipe; // FD_PIPE
+  struct inode *ip;  // FD_INODE and FD_DEVICE
+  uint off;          // FD_INODE
+  short major;       // FD_DEVICE
+};
 
 struct cpu cpus[NCPU];
 
@@ -299,17 +314,25 @@ fork(void)
   }
   np->sz = p->sz;
 
+
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 
   // Cause fork to return 0 in the child.
   np->trapframe->a0 = 0;
 
+  
   // increment reference counts on open file descriptors.
   for(i = 0; i < NOFILE; i++)
     if(p->ofile[i])
       np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
+  for(int i=0;i<16;i++){
+    if(p->vma[i].used){
+      memmove(&np->vma[i], &p->vma[i], sizeof(p->vma[i]));
+      filedup(p->vma[i].f);
+    }
+  }
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 
@@ -362,7 +385,28 @@ exit(int status)
       p->ofile[fd] = 0;
     }
   }
-
+  int i=0;
+  uint64 a;
+  pte_t *pte;
+  for(i=0;i<16;i++){
+    if(p->vma[i].used ==1){
+      for(a = p->vma[i].addr; a < p->vma[i].addr + p->vma[i].length; a += PGSIZE){
+        if((pte = walk(p->pagetable, a, 0)) != 0 && (*pte & PTE_V)){
+          if(p->vma[i].flags == MAP_SHARED){
+            begin_op();
+            ilock(p->vma[i].f->ip);
+            writei(p->vma[i].f->ip, 1, (uint64)a, a-p->vma[i].iaddr, PGSIZE);
+            iunlock(p->vma[i].f->ip);
+            end_op();
+          }
+          uvmunmap(p->pagetable, PGROUNDDOWN(a), 1, 1);
+        }
+      }
+      fileclose(p->vma[i].f);
+      p->vma[i].used = 0;
+    }
+  }
+  
   begin_op();
   iput(p->cwd);
   end_op();
@@ -425,7 +469,6 @@ wait(uint64 addr)
         release(&pp->lock);
       }
     }
-
     // No point waiting if we don't have any children.
     if(!havekids || killed(p)){
       release(&wait_lock);

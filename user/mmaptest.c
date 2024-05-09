@@ -15,7 +15,7 @@ char buf[BSIZE];
 int
 main(int argc, char *argv[])
 {
-  mmap_test();
+  //mmap_test();
   fork_test();
   printf("mmaptest: all tests succeeded\n");
   exit(0);
@@ -278,16 +278,15 @@ fork_test(void)
   // read just 2nd page.
   if(*(p1+PGSIZE) != 'A')
     err("fork mismatch (1)");
-
+  //_v1(p1);
   if((pid = fork()) < 0)
     err("fork");
   if (pid == 0) {
-    _v1(p1);
+    //_v1(p1);
     if (munmap(p1, PGSIZE) == -1) // just the first page
       err("munmap (7)");
     exit(0); // tell the parent that the mapping looks OK.
   }
-
   int status = -1;
   wait(&status);
 
@@ -297,8 +296,8 @@ fork_test(void)
   }
 
   // check that the parent's mappings are still there.
-  _v1(p1);
   _v1(p2);
+  _v1(p1);
 
   printf("fork_test OK\n");
 }

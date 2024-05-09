@@ -80,9 +80,15 @@ struct trapframe {
 };
 struct vma{
   int used;
-  int fd;
+  struct file *f;
+  uint64 addr;
+  uint64 length;
+  uint64 prot;
+  uint64 flags;
+  uint64 offset;
+  uint64 iaddr;
 
-}
+};
 
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
